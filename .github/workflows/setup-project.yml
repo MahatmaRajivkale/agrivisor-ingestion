@@ -1,0 +1,68 @@
+name: Create Agrivisor FastAPI Structure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create project structure
+        run: |
+          mkdir -p app
+
+          touch app/__init__.py
+
+          cat > app/main.py <<'EOF'
+          from fastapi import FastAPI
+
+          app = FastAPI(
+              title="Agrivisor Ingestion API",
+              version="1.0.0"
+          )
+
+          @app.get("/health")
+          def health():
+              return {"status": "ok"}
+          EOF
+
+          cat > requirements.txt <<'EOF'
+          fastapi
+          uvicorn[standard]
+          EOF
+
+          cat > .gitignore <<'EOF'
+          __pycache__/
+          *.py[cod]
+          .env
+          .venv/
+          venv/
+          EOF
+
+          cat > README.md <<'EOF'
+          # Agrivisor Ingestion API
+
+          Trusted FastAPI ingestion service for Agrivisor ESP32 telemetry.
+
+          ## Status
+
+          Initial project structure.
+          EOF
+
+      - name: Commit generated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          git diff --cached --quiet || git commit -m "Create Agrivisor FastAPI project structure"
+
+          git push
