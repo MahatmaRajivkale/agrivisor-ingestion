@@ -14,10 +14,6 @@ app = FastAPI(
 )
 
 
-# ---------------------------------------------------------
-# SUPABASE
-# ---------------------------------------------------------
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
@@ -27,15 +23,12 @@ if not SUPABASE_URL:
 if not SUPABASE_SERVICE_ROLE_KEY:
     raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY environment variable is missing")
 
+
 supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
-
-# ---------------------------------------------------------
-# TELEMETRY MODEL
-# ---------------------------------------------------------
 
 class TelemetryPayload(BaseModel):
     device_id: UUID
@@ -51,18 +44,10 @@ class TelemetryPayload(BaseModel):
     k: float = Field(..., finite=True)
 
 
-# ---------------------------------------------------------
-# HEALTH
-# ---------------------------------------------------------
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-
-# ---------------------------------------------------------
-# TELEMETRY INGESTION
-# ---------------------------------------------------------
 
 @app.post("/api/telemetry")
 def receive_telemetry(payload: TelemetryPayload):
@@ -81,12 +66,7 @@ def receive_telemetry(payload: TelemetryPayload):
     }
 
     try:
-        result = (
-            supabase
-            .table("sensor_readings")
-            .insert(row)
-            .execute()
-        )
+        supabase.table("sensor_readings").insert(row).execute()
 
         return {
             "status": "received",
@@ -96,7 +76,6 @@ def receive_telemetry(payload: TelemetryPayload):
     except Exception as exc:
         error_text = str(exc)
 
-        # Duplicate message_id means the telemetry was already accepted.
         if "duplicate" in error_text.lower() or "23505" in error_text:
             return {
                 "status": "already_received",
