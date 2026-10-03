@@ -16,10 +16,6 @@ app = FastAPI(
 )
 
 
-# ---------------------------------------------------------
-# ENVIRONMENT VARIABLES
-# ---------------------------------------------------------
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 PROVISIONING_KEY = os.getenv("PROVISIONING_KEY")
@@ -29,29 +25,17 @@ if not SUPABASE_URL:
     raise RuntimeError("SUPABASE_URL environment variable is missing")
 
 if not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError(
-        "SUPABASE_SERVICE_ROLE_KEY environment variable is missing"
-    )
+    raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY environment variable is missing")
 
 if not PROVISIONING_KEY:
-    raise RuntimeError(
-        "PROVISIONING_KEY environment variable is missing"
-    )
+    raise RuntimeError("PROVISIONING_KEY environment variable is missing")
 
-
-# ---------------------------------------------------------
-# SUPABASE CLIENT
-# ---------------------------------------------------------
 
 supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
-
-# ---------------------------------------------------------
-# TELEMETRY MODEL
-# ---------------------------------------------------------
 
 class TelemetryPayload(BaseModel):
     device_id: UUID
@@ -67,27 +51,15 @@ class TelemetryPayload(BaseModel):
     k: float = Field(..., finite=True)
 
 
-# ---------------------------------------------------------
-# DEVICE PROVISIONING MODEL
-# ---------------------------------------------------------
-
 class ProvisionRequest(BaseModel):
     device_id: UUID
     credential: str
 
 
-# ---------------------------------------------------------
-# HEALTH
-# ---------------------------------------------------------
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-
-# ---------------------------------------------------------
-# CREDENTIAL HASHING
-# ---------------------------------------------------------
 
 def hash_credential(credential: str) -> str:
     return hashlib.sha256(
@@ -95,16 +67,11 @@ def hash_credential(credential: str) -> str:
     ).hexdigest()
 
 
-# ---------------------------------------------------------
-# DEVICE PROVISIONING
-# ---------------------------------------------------------
-
 @app.post("/api/provision")
 def provision_device(
     request: ProvisionRequest,
     x_provisioning_key: str = Header(default=""),
 ):
-
     if not secrets.compare_digest(
         x_provisioning_key,
         PROVISIONING_KEY,
@@ -156,17 +123,11 @@ def provision_device(
         )
 
 
-# ---------------------------------------------------------
-# TELEMETRY INGESTION
-# ---------------------------------------------------------
-
 @app.post("/api/telemetry")
 def receive_telemetry(
     payload: TelemetryPayload,
     authorization: str = Header(default=""),
 ):
-
-    # Require Bearer authentication
     if not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -181,7 +142,6 @@ def receive_telemetry(
             detail="Missing device credential.",
         )
 
-    # Find device
     try:
         device_result = (
             supabase
@@ -200,14 +160,12 @@ def receive_telemetry(
             detail="Device lookup failed.",
         )
 
-    # Device must exist and have a credential
     if not device or not device.get("auth_token_hash"):
         raise HTTPException(
             status_code=401,
             detail="Device not provisioned.",
         )
 
-    # Verify credential
     supplied_hash = hash_credential(credential)
 
     if not secrets.compare_digest(
@@ -219,7 +177,6 @@ def receive_telemetry(
             detail="Invalid device credential.",
         )
 
-    # Prepare sensor row
     row = {
         "device_id": str(payload.device_id),
         "message_id": str(payload.message_id),
@@ -233,12 +190,13 @@ def receive_telemetry(
         "k": payload.k,
     }
 
-    # Insert telemetry
     try:
-        supabase
-        .table("sensor_readings")
-        .insert(row)
-        .execute()
+        result = (
+            supabase
+            .table("sensor_readings")
+            .insert(row)
+            .execute()
+        )
 
         return {
             "status": "received",
@@ -248,7 +206,6 @@ def receive_telemetry(
     except Exception as exc:
         error_text = str(exc)
 
-        # Duplicate message_id = already received
         if (
             "duplicate" in error_text.lower()
             or "23505" in error_text
